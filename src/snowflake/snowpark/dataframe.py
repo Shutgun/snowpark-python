@@ -150,6 +150,7 @@ from snowflake.snowpark._internal.type_utils import (
 )
 from snowflake.snowpark._internal.udf_utils import add_package_to_existing_packages
 from snowflake.snowpark._internal.utils import (
+    ALREADY_QUOTED,
     SKIP_LEVELS_THREE,
     SKIP_LEVELS_TWO,
     TempObjectType,
@@ -285,7 +286,7 @@ def _get_aliased_column_names(
 ) -> List[str]:
     aliases = []
     for c in cs:
-        unquoted_col_name = c.strip('"')
+        unquoted_col_name = c[1:-1] if ALREADY_QUOTED.match(c) else c
         if c in common_col_names:
             if suffix:
                 column_case_insensitive = is_snowflake_quoted_id_case_insensitive(c)

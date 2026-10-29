@@ -317,6 +317,40 @@ def test_cross_join(session):
     )
 
 
+@pytest.mark.parametrize(
+    "col_name",
+    ['"a"""', '"a ""b"""', '"""a"""', '"a.b"', '"Supplier.id ` ""quoted"""'],
+)
+@pytest.mark.parametrize(
+    "how, expected_rows",
+    [
+        ("leftsemi", [Row(31, "a")]),
+        ("leftanti", [Row(99, "b")]),
+        ("inner", [Row(31, "a", 31)]),
+        ("left", [Row(31, "a", 31), Row(99, "b", None)]),
+        ("outer", [Row(31, "a", 31), Row(99, "b", None)]),
+        ("cross", [Row(31, "a", 31), Row(99, "b", 31)]),
+    ],
+)
+def test_join_keeps_quoted_column_names(session, col_name, how, expected_rows):
+    df = session.create_dataframe([[31, "a"], [99, "b"]], schema=[col_name, "LABEL"])
+    keys = session.create_dataframe([[31]], schema=['"K"'])
+
+    if how == "cross":
+        joined = df.join(keys, how=how)
+    else:
+        joined = df.join(keys, df[col_name] == keys['"K"'], how=how)
+
+    expected_columns = df.columns
+    if how not in ("leftsemi", "leftanti"):
+        expected_columns += keys.columns
+    assert joined.columns == expected_columns
+    Utils.check_answer(joined, expected_rows)
+    Utils.check_answer(
+        joined.select(col_name), [Row(r[0]) for r in expected_rows]
+    )
+
+
 @pytest.mark.skipif(
     "config.getoption('local_testing_mode', default=False)",
     reason="SNOW-1359450: Suport ASOF join in Local Testing",

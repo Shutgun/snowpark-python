@@ -24,7 +24,7 @@ from snowflake.snowpark._internal.analyzer.snowflake_plan_node import SnowflakeT
 from snowflake.snowpark._internal.ast.batch import AstBatch
 from snowflake.snowpark._internal.server_connection import ServerConnection
 from snowflake.snowpark._internal.utils import set_ast_state, AstFlagSource
-from snowflake.snowpark.dataframe import _get_unaliased
+from snowflake.snowpark.dataframe import _get_aliased_column_names, _get_unaliased
 from snowflake.snowpark.exceptions import SnowparkCreateDynamicTableException
 from snowflake.snowpark.session import Session
 from snowflake.snowpark.types import IntegerType, StringType
@@ -52,6 +52,41 @@ def test_get_unaliased():
     unaliased = "l_hfdjishafud_A"
     values = _get_unaliased(aliased)
     assert len(values) == 0
+
+
+@pytest.mark.parametrize(
+    "col_name, expected",
+    [
+        ('"a"""', '"a"""'),
+        ('"a ""b"""', '"a ""b"""'),
+        ('"""a"""', '"""a"""'),
+        ('"A"', '"A"'),
+        ('"a.b"', '"a.b"'),
+        ('"Supplier.id ` ""quoted"""', '"Supplier.id ` ""quoted"""'),
+        # unquoted input must not lose its first and last character
+        ("abc", '"abc"'),
+        ("$1", '"$1"'),
+    ],
+)
+def test_get_aliased_column_names_without_common_columns(col_name, expected):
+    assert _get_aliased_column_names(None, [col_name], "", "", []) == [expected]
+
+
+@pytest.mark.parametrize(
+    "col_name, prefix, suffix, expected",
+    [
+        ('"a"""', None, "_r", '"a""_r"'),
+        ('"""a"""', None, "_r", '"""a""_r"'),
+        ('"a"""', "P_", None, '"P_a"""'),
+        ('"A"', None, "_r", '"A_R"'),
+    ],
+)
+def test_get_aliased_column_names_common_columns_keep_escaped_quotes(
+    col_name, prefix, suffix, expected
+):
+    assert _get_aliased_column_names(
+        None, [col_name], prefix, suffix, [col_name]
+    ) == [expected]
 
 
 def test_dataframe_method_alias():
